@@ -31,7 +31,7 @@ async def procesar_documento(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("No autorizado.")
         return
 
-    await update.message.reply_text("Recivi el comprobante, procesando...")
+    await update.message.reply_text("📄 Recibí el comprobante, procesando...")
 
     try:
         if update.message.photo:
@@ -65,7 +65,7 @@ async def procesar_documento(update: Update, context: ContextTypes.DEFAULT_TYPE)
         else:
             contenido = [{"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}}, {"type": "text", "text": PROMPT}]
 
-        await update.message.reply_text("Claude analizando...")
+        await update.message.reply_text("🤖 Claude analizando...")
 
         msg = client.messages.create(model="claude-opus-4-5", max_tokens=1500, messages=[{"role": "user", "content": contenido}])
         texto = msg.content[0].text.strip()
@@ -80,28 +80,28 @@ async def procesar_documento(update: Update, context: ContextTypes.DEFAULT_TYPE)
         datos["imagen_media_type"] = media_type
         datos["imagen_nombre"] = nombre
 
-        await update.message.reply_text("Registrando en Google Sheets...")
+        await update.message.reply_text("📊 Registrando en Google Sheets...")
 
         resp = requests.post(APPS_SCRIPT_URL, json=datos, timeout=60)
 
         if resp.status_code == 200:
             confirmacion = (
-    f"✅ *Factura registrada exitosamente*\n\n"
-    f"📋 *Comprobante:* {datos.get('tipo_comprobante')} {datos.get('numero_comprobante')}\n"
-    f"🏢 *Emisor:* {datos.get('razon_social_emisor')}\n"
-    f"📅 *Fecha:* {datos.get('fecha')}\n"
-    f"💰 *Total:* ${datos.get('total')}\n"
-    f"🔑 *CAE:* {datos.get('cae')}"
-)
-await update.message.reply_text(confirmacion, parse_mode="Markdown")
+                f"✅ *Factura registrada exitosamente*\n\n"
+                f"📋 *Comprobante:* {datos.get('tipo_comprobante')} {datos.get('numero_comprobante')}\n"
+                f"🏢 *Emisor:* {datos.get('razon_social_emisor')}\n"
+                f"📅 *Fecha:* {datos.get('fecha')}\n"
+                f"💰 *Total:* ${datos.get('total')}\n"
+                f"🔑 *CAE:* {datos.get('cae')}"
+            )
+            await update.message.reply_text(confirmacion, parse_mode="Markdown")
         else:
-            await update.message.reply_text(f"Error en Sheets: {resp.text[:200]}")
+            await update.message.reply_text(f"⚠️ Error en Sheets: {resp.text[:200]}")
 
     except json.JSONDecodeError:
-        await update.message.reply_text("Claude no pudo leer la factura. Intentá con foto mas clara.")
+        await update.message.reply_text("❌ Claude no pudo leer la factura. Intentá con foto mas clara.")
     except Exception as e:
         logger.error(f"Error: {e}")
-        await update.message.reply_text(f"Error: {str(e)}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
 
 def main():
     import asyncio
