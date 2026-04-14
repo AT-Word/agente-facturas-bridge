@@ -94,7 +94,6 @@ async def procesar_documento(update: Update, context: ContextTypes.DEFAULT_TYPE)
     f"🔑 *CAE:* {datos.get('cae')}"
 )
 await update.message.reply_text(confirmacion, parse_mode="Markdown")
-            await update.message.reply_text(confirmacion)
         else:
             await update.message.reply_text(f"Error en Sheets: {resp.text[:200]}")
 
