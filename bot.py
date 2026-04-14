@@ -86,13 +86,14 @@ async def procesar_documento(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         if resp.status_code == 200:
             confirmacion = (
-                f"Factura registrada!\n\n"
-                f"Comprobante: {datos.get('tipo_comprobante')} {datos.get('numero_comprobante')}\n"
-                f"Emisor: {datos.get('razon_social_emisor')}\n"
-                f"Fecha: {datos.get('fecha')}\n"
-                f"Total: ${datos.get('total')}\n"
-                f"CAE: {datos.get('cae')}"
-            )
+    f"✅ *Factura registrada exitosamente*\n\n"
+    f"📋 *Comprobante:* {datos.get('tipo_comprobante')} {datos.get('numero_comprobante')}\n"
+    f"🏢 *Emisor:* {datos.get('razon_social_emisor')}\n"
+    f"📅 *Fecha:* {datos.get('fecha')}\n"
+    f"💰 *Total:* ${datos.get('total')}\n"
+    f"🔑 *CAE:* {datos.get('cae')}"
+)
+await update.message.reply_text(confirmacion, parse_mode="Markdown")
             await update.message.reply_text(confirmacion)
         else:
             await update.message.reply_text(f"Error en Sheets: {resp.text[:200]}")
