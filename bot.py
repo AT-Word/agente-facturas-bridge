@@ -7,10 +7,6 @@ import requests
 import anthropic
 from telegram import Update
 from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
-import io
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -23,8 +19,6 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 APPS_SCRIPT_URL = os.environ.get("APPS_SCRIPT_URL")
 ALLOWED_USER_ID = int(os.environ.get("ALLOWED_USER_ID", "0"))
-DRIVE_FOLDER_ID = os.environ.get("DRIVE_FOLDER_ID")
-CREDENTIALS_PATH = "/etc/secrets/google_credentials.json"
 
 PROMPT_EXTRACCION = """Sos un asistente contable especializado en Argentina.
 Analizá este comprobante y extraé TODOS los datos en formato JSON.
@@ -57,42 +51,6 @@ Devolvé ÚNICAMENTE el JSON, sin texto adicional, con esta estructura exacta:
 }
 
 Si algún campo no figura en el comprobante, usá null para texto y 0.00 para números."""
-
-def get_drive_service():
-    creds = service_account.Credentials.from_service_account_file(
-        CREDENTIALS_PATH,
-        scopes=["https://www.googleapis.com/auth/drive"]
-    )
-    return build("drive", "v3", credentials=creds)
-
-def subir_a_drive(contenido_bytes, nombre_archivo, media_type):
-    try:
-        service = get_drive_service()
-        file_metadata = {
-            "name": nombre_archivo,
-            "parents": [DRIVE_FOLDER_ID] if DRIVE_FOLDER_ID else []
-        }
-        media = MediaIoBaseUpload(
-            io.BytesIO(contenido_bytes),
-            mimetype=media_type,
-            resumable=True
-        )
-        archivo = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields="id, webViewLink"
-        ).execute()
-
-        # Hacer el archivo público
-        service.permissions().create(
-            fileId=archivo["id"],
-            body={"type": "anyone", "role": "reader"}
-        ).execute()
-
-        return archivo.get("webViewLink")
-    except Exception as e:
-        logger.error(f"Error subiendo a Drive: {e}")
-        return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -140,10 +98,6 @@ async def procesar_documento(update: Update, context: ContextTypes.DEFAULT_TYPE)
         contenido_bytes = bytes(await archivo.download_as_bytearray())
         datos_b64 = base64.standard_b64encode(contenido_bytes).decode("utf-8")
 
-        # Subir a Google Drive
-        await update.message.reply_text("☁️ Guardando comprobante en Drive...")
-        link_drive = subir_a_drive(contenido_bytes, nombre_archivo, media_type)
-
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
         if tipo == "document":
@@ -162,66 +116,4 @@ async def procesar_documento(update: Update, context: ContextTypes.DEFAULT_TYPE)
         mensaje = client.messages.create(
             model="claude-opus-4-5",
             max_tokens=1500,
-            messages=[{"role": "user", "content": contenido_mensaje}]
-        )
-
-        respuesta_texto = mensaje.content[0].text.strip()
-
-        if "```json" in respuesta_texto:
-            respuesta_texto = respuesta_texto.split("```json")[1].split("```")[0].strip()
-        elif "```" in respuesta_texto:
-            respuesta_texto = respuesta_texto.split("```")[1].split("```")[0].strip()
-
-        datos = json.loads(respuesta_texto)
-
-        # Agregar link de Drive al JSON
-        if link_drive:
-            datos["link_comprobante"] = link_drive
-
-        await update.message.reply_text("📊 Registrando en Google Sheets...")
-
-        respuesta_sheets = requests.post(APPS_SCRIPT_URL, json=datos, timeout=30)
-
-        if respuesta_sheets.status_code == 200:
-            confirmacion = (
-                f"✅ *Factura registrada exitosamente*\n\n"
-                f"📋 *Comprobante:* {datos.get('tipo_comprobante')} {datos.get('numero_comprobante')}\n"
-                f"🏢 *Emisor:* {datos.get('razon_social_emisor')}\n"
-                f"📅 *Fecha:* {datos.get('fecha')}\n"
-                f"💰 *Total:* ${datos.get('total')}\n"
-                f"🔑 *CAE:* {datos.get('cae')}\n"
-            )
-            if link_drive:
-                confirmacion += f"📎 [Ver comprobante]({link_drive})"
-
-            await update.message.reply_text(confirmacion, parse_mode="Markdown")
-        else:
-            await update.message.reply_text(f"⚠️ Error al registrar en Sheets: {respuesta_sheets.text[:200]}")
-
-    except json.JSONDecodeError:
-        await update.message.reply_text("❌ Claude no pudo extraer los datos. Intentá con una foto más clara.")
-    except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        await update.message.reply_text(f"❌ Error: {str(e)}")
-
-def main():
-    import asyncio
-    logger.info("Iniciando bot de Telegram...")
-    logger.info(f"TELEGRAM_TOKEN configurado: {'Sí' if TELEGRAM_TOKEN else 'NO'}")
-    logger.info(f"ANTHROPIC_API_KEY configurado: {'Sí' if ANTHROPIC_API_KEY else 'NO'}")
-    logger.info(f"APPS_SCRIPT_URL configurado: {'Sí' if APPS_SCRIPT_URL else 'NO'}")
-    logger.info(f"DRIVE_FOLDER_ID configurado: {'Sí' if DRIVE_FOLDER_ID else 'NO'}")
-    logger.info(f"ALLOWED_USER_ID: {ALLOWED_USER_ID}")
-
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, procesar_documento))
-
-    logger.info("Bot iniciado y escuchando...")
-
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
-
-if __name__ == "__main__":
-    main()
+            messages=[{"role": "user", "content": contenido_me
