@@ -152,6 +152,7 @@ async def procesar_documento(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"❌ Error: {str(e)}")
 
 def main():
+    import asyncio
     logger.info("Iniciando bot de Telegram...")
     logger.info(f"TELEGRAM_TOKEN configurado: {'Sí' if TELEGRAM_TOKEN else 'NO'}")
     logger.info(f"ANTHROPIC_API_KEY configurado: {'Sí' if ANTHROPIC_API_KEY else 'NO'}")
@@ -163,6 +164,9 @@ def main():
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, procesar_documento))
 
     logger.info("Bot iniciado y escuchando...")
+    
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
