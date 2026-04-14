@@ -7,3 +7,24 @@ services:
     envVars:
       - key: APPS_SCRIPT_URL
         sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: ALLOWED_USER_ID
+        sync: false
+
+  - type: worker
+    name: agente-facturas-bot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: APPS_SCRIPT_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: ALLOWED_USER_ID
+        sync: false
