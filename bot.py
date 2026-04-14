@@ -1,10 +1,19 @@
 import os
+import sys
 import json
 import base64
+import logging
 import requests
 import anthropic
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+    stream=sys.stdout
+)
+logger = logging.getLogger(__name__)
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
@@ -43,8 +52,22 @@ Devolvé ÚNICAMENTE el JSON, sin texto adicional, con esta estructura exacta:
 
 Si algún campo no figura en el comprobante, usá null para texto y 0.00 para números."""
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    logger.info(f"Comando /start recibido de user_id: {user_id}")
+    if user_id != ALLOWED_USER_ID:
+        await update.message.reply_text("⛔ No autorizado.")
+        return
+    await update.message.reply_text(
+        "👋 ¡Hola Fernando! Soy tu agente contable.\n\n"
+        "Mandame una foto o PDF de cualquier factura y la registro automáticamente en Google Sheets.\n\n"
+        "📸 Foto JPG/PNG → ✅\n"
+        "📄 PDF → ✅"
+    )
+
 async def procesar_documento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    logger.info(f"Documento recibido de user_id: {user_id}")
     if user_id != ALLOWED_USER_ID:
         await update.message.reply_text("⛔ No autorizado.")
         return
@@ -52,7 +75,6 @@ async def procesar_documento(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text("📄 Recibí el comprobante, procesando...")
 
     try:
-        # Obtener archivo
         if update.message.photo:
             archivo = await update.message.photo[-1].get_file()
             media_type = "image/jpeg"
@@ -73,35 +95,19 @@ async def procesar_documento(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await update.message.reply_text("❌ Mandame una foto o PDF de la factura.")
             return
 
-        # Descargar y convertir a base64
         contenido_bytes = await archivo.download_as_bytearray()
         datos_b64 = base64.standard_b64encode(contenido_bytes).decode("utf-8")
 
-        # Llamar a Claude
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
         if tipo == "document":
             contenido_mensaje = [
-                {
-                    "type": "document",
-                    "source": {
-                        "type": "base64",
-                        "media_type": media_type,
-                        "data": datos_b64
-                    }
-                },
+                {"type": "document", "source": {"type": "base64", "media_type": media_type, "data": datos_b64}},
                 {"type": "text", "text": PROMPT_EXTRACCION}
             ]
         else:
             contenido_mensaje = [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": media_type,
-                        "data": datos_b64
-                    }
-                },
+                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": datos_b64}},
                 {"type": "text", "text": PROMPT_EXTRACCION}
             ]
 
@@ -115,7 +121,6 @@ async def procesar_documento(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         respuesta_texto = mensaje.content[0].text.strip()
 
-        # Parsear JSON
         if "```json" in respuesta_texto:
             respuesta_texto = respuesta_texto.split("```json")[1].split("```")[0].strip()
         elif "```" in respuesta_texto:
@@ -123,14 +128,9 @@ async def procesar_documento(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         datos = json.loads(respuesta_texto)
 
-        # Enviar a Google Sheets
         await update.message.reply_text("📊 Registrando en Google Sheets...")
 
-        respuesta_sheets = requests.post(
-            APPS_SCRIPT_URL,
-            json=datos,
-            timeout=30
-        )
+        respuesta_sheets = requests.post(APPS_SCRIPT_URL, json=datos, timeout=30)
 
         if respuesta_sheets.status_code == 200:
             confirmacion = (
@@ -148,25 +148,21 @@ async def procesar_documento(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except json.JSONDecodeError:
         await update.message.reply_text("❌ Claude no pudo extraer los datos. Intentá con una foto más clara.")
     except Exception as e:
+        logger.error(f"Error: {str(e)}")
         await update.message.reply_text(f"❌ Error: {str(e)}")
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id != ALLOWED_USER_ID:
-        await update.message.reply_text("⛔ No autorizado.")
-        return
-    await update.message.reply_text(
-        "👋 ¡Hola Fernando! Soy tu agente contable.\n\n"
-        "Mandame una foto o PDF de cualquier factura y la registro automáticamente en Google Sheets.\n\n"
-        "📸 Foto JPG/PNG → ✅\n"
-        "📄 PDF → ✅"
-    )
-
 def main():
+    logger.info("Iniciando bot de Telegram...")
+    logger.info(f"TELEGRAM_TOKEN configurado: {'Sí' if TELEGRAM_TOKEN else 'NO'}")
+    logger.info(f"ANTHROPIC_API_KEY configurado: {'Sí' if ANTHROPIC_API_KEY else 'NO'}")
+    logger.info(f"APPS_SCRIPT_URL configurado: {'Sí' if APPS_SCRIPT_URL else 'NO'}")
+    logger.info(f"ALLOWED_USER_ID: {ALLOWED_USER_ID}")
+
     app = Application.builder().token(TELEGRAM_TOKEN).build()
-    app.add_handler(MessageHandler(filters.COMMAND & filters.Regex("start"), start))
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, procesar_documento))
-    print("Bot iniciado...")
+
+    logger.info("Bot iniciado y escuchando...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
