@@ -53,7 +53,7 @@ def test_tiendanube():
         return jsonify({
             "status": "ok",
             "total": len(productos),
-            "primeros_5": [{"nombre": p.get("name", {}).get("es", str(p.get("name", ""))), "precio": p.get("price", "")} for p in productos]
+            "primeros_5": [{"nombre": str(p.get("name", "")), "precio": p.get("price", "")} for p in productos]
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
