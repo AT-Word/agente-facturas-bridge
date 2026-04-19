@@ -51,14 +51,16 @@ def callback():
 @app.route("/test-tiendanube", methods=["GET"])
 def test_tiendanube():
     try:
+        token = os.environ.get("TN_ACCESS_TOKEN")
+        store_id = os.environ.get("TN_STORE_ID")
         resp = requests.get(
-            f"https://api.tiendanube.com/v1/{TN_STORE_ID}/products?limit=5",
+            f"https://api.tiendanube.com/v1/{store_id}/products?limit=5",
             headers={
-                "Authentication": f"bearer {TN_ACCESS_TOKEN}",
+                "Authentication": f"bearer {token}",
                 "User-Agent": "AT Word Agente (atwordecommerce@gmail.com)"
             }
         )
-        return jsonify({"raw": resp.json()})
+        return jsonify({"raw": resp.json(), "token_usado": token[:10] + "..."})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
