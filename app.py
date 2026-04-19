@@ -60,7 +60,7 @@ def test_tiendanube():
                 "User-Agent": "AT Word Agente (atwordecommerce@gmail.com)"
             }
         )
-        return jsonify({"raw": resp.json(), "token_usado": token[:10] + "..."})
+        return jsonify({"raw": resp.json(), "status": resp.status_code})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
