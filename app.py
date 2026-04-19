@@ -49,11 +49,6 @@ def test_tiendanube():
                 "User-Agent": "AT Word Agente (atword@gmail.com)"
             }
         )
-        productos = resp.json()
-        return jsonify({
-            "status": "ok",
-            "total": len(productos),
-            "primeros_5": [{"nombre": str(p.get("name", "")), "precio": p.get("price", "")} for p in productos]
-        })
+        return jsonify({"raw": resp.json()})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
