@@ -36,3 +36,24 @@ def registrar():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+TN_ACCESS_TOKEN = os.environ.get("TN_ACCESS_TOKEN")
+TN_STORE_ID = os.environ.get("TN_STORE_ID")
+
+@app.route("/test-tiendanube", methods=["GET"])
+def test_tiendanube():
+    try:
+        resp = requests.get(
+            f"https://api.tiendanube.com/v1/{TN_STORE_ID}/products?limit=5",
+            headers={
+                "Authentication": f"bearer {TN_ACCESS_TOKEN}",
+                "User-Agent": "AT Word Agente (atword@gmail.com)"
+            }
+        )
+        productos = resp.json()
+        return jsonify({
+            "status": "ok",
+            "total": len(productos),
+            "primeros_5": [{"nombre": p["name"]["es"], "precio": p["price"]} for p in productos]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
